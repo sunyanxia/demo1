@@ -1,0 +1,119 @@
+#### Haproxy+keepalived模式下服务宕机恢复遇到的问题
+
+##### **1、现象**
+
+```
+用户A发送的请求经过haproxy分发到服务器1，服务器1宕机后，用户A的请求被分发到服务器2，服务器1恢复之后，用户A的请求再分发到服务器1。由于我们的redis配置的是双主模式，redis之间不做数据同步，redis中保存了session的信息，多次切换导致session一致性被破坏。
+```
+
+
+
+**2、分析**
+
+```
+环境有两个控制节点，每个控制节点上启动一个keepavalived和一个haproxy。keepalived采用主备模式，某个节点上的keepalived是master状态，那么由这个节点上的haproxy去处理请求分发，另外一个backup状态的keepalived不工作。keepalived中配置的是非抢占模式，但问题并不是keepalived导致的，而是haproxy未配置非抢占模式。
+
+1）keepavlived的配置文件如下：
+vrrp_script haproxy {
+    script "/etc/keepalived/check_haproxy.sh"
+    interval 2
+    weight 2
+}
+
+vrrp_sync_group VG1 {
+    group {
+        VI_1
+        VI_2
+    }
+}
+
+vrrp_instance VI_1 {
+    state master
+    interface ens2f0
+    virtual_router_id 34
+    priority 100
+    nopreempt   //非抢占模式
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass xxxxx
+    }
+    virtual_ipaddress {
+        172.30.0.3
+    }
+    track_script {
+        haproxy
+    }
+}
+
+vrrp_instance VI_2 {
+    state master
+    interface ens2f1
+    virtual_router_id 201
+    priority 100
+    nopreempt
+    advert_int 1
+    authentication {
+        auth_type PASS
+        auth_pass xxxxx
+    }
+    virtual_ipaddress {
+        10.10.10.10
+    }
+    track_script {
+        haproxy
+    }
+}
+
+2）haproxy的配置如下
+
+global
+      log 127.0.0.1 local2
+      chroot /var/lib/haproxy
+      daemon
+      group haproxy
+      maxconn 4000
+      pidfile /var/run/haproxy.pid
+      user haproxy
+      ssl-default-bind-options force-tlsv12
+      ssl-default-bind-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
+      ssl-default-server-options force-tlsv12
+      ssl-default-server-ciphers ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:RSA+AESGCM:RSA+AES:!aNULL:!MD5:!DSS
+      tune.ssl.default-dh-param 2048
+
+defaults
+      log global
+      maxconn 4000
+      option redispatch
+      retries 3
+      timeout http-request 10s
+      timeout queue 1m
+      timeout connect 10s
+      timeout client 1m
+      timeout server 5m
+      timeout check 10s
+...
+listen redis_cluster
+      bind 172.30.0.3:6379
+      balance source    //采用负载均衡的方式
+      option tcpka
+      option tcplog
+      server 172.30.0.5 mgm-net1:6379 backup check inter 2000 rise 2 fall 5
+      server 172.30.0.2 mgm-net0:6379 check inter 2000 rise 2 fall 5
+
+```
+
+
+
+**3、方案**
+
+```
+待xwz解决
+```
+
+
+
+
+
+
+
