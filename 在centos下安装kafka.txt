@@ -6,7 +6,7 @@
 1、配置dns
 # /etc/resolv.conf
 nameserver 233.5.5.5 阿里源
-2、登录海康源
+2、登录阿里源
 找到对应的源，执行命令
 #wget http://mirrors.hikvision.com.cn/help/centos/7/CentOS-Base.repo -O /etc/yum.repos.d/CentOS-Base.repo
 #wget -O /etc/yum.repos.d/epel.repo http://mirrors.hikvision.com.cn/help/epel/epel-7.repo
